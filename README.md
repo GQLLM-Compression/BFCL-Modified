@@ -1,3 +1,11 @@
+# BFCL-Modified (a fork of Gorilla)
+
+> **This is BFCL-Modified, not the official Berkeley Function Calling Leaderboard.** It is a fork of Gorilla with
+> two changes to how the leaderboard scores a model: a tool call returned as text is credited as a call, and an
+> accepted answer followed by a qualifier (`'Chennai, India'` for `'Chennai'`) passes. Scores from it are named
+> BFCL-Modified and are not comparable with the published leaderboard. What changed, why and how it was checked:
+> [MODIFICATIONS.md](MODIFICATIONS.md). Everything below is the upstream README.
+
 # Gorilla: Large Language Model Connected with Massive APIs
 
 <div align="center">

@@ -1,11 +1,13 @@
 import json
 import os
+import threading
 import time
 from typing import Any
 
 from bfcl_eval.constants.type_mappings import GORILLA_TO_OPENAPI
 from bfcl_eval.model_handler.base_handler import BaseHandler
 from bfcl_eval.constants.enums import ModelStyle
+from bfcl_eval.model_handler.text_calls import recover_text_calls
 from bfcl_eval.model_handler.utils import (
     convert_to_function_call,
     convert_to_tool,
@@ -16,6 +18,22 @@ from bfcl_eval.model_handler.utils import (
     system_prompt_pre_processing_chat_model,
 )
 from openai import OpenAI, RateLimitError
+
+# BFCL-Modified (MODIFICATIONS.md): the tools the request being answered offered, and the replies of
+# the current task whose call was credited from text. One handler serves every worker thread, so both
+# are kept per thread.
+_request = threading.local()
+TEXT_CALLS_FIELD = "text_calls_credited"
+TEXT_CALLS_TEXT_FIELD = "text_calls_original"
+_TEXT_CALLS_KEPT = 5
+_TEXT_CALLS_KEPT_CHARS = 400
+
+
+def _credited_texts() -> list:
+    texts = getattr(_request, "credited", None)
+    if texts is None:
+        texts = _request.credited = []
+    return texts
 
 
 class OpenAICompletionsHandler(BaseHandler):
@@ -76,9 +94,32 @@ class OpenAICompletionsHandler(BaseHandler):
 
     #### FC methods ####
 
+    def inference(
+        self,
+        test_entry: dict,
+        include_input_log: bool,
+        exclude_state_log: bool,
+    ):
+        # BFCL-Modified: the result row also says how many replies of the task had their call
+        # credited from text (see _parse_query_response_FC), so a score can say which tasks relied on it.
+        _credited_texts().clear()
+        result, metadata = super().inference(test_entry, include_input_log, exclude_state_log)
+        texts = _credited_texts()
+        if texts and isinstance(metadata, dict):
+            metadata[TEXT_CALLS_FIELD] = len(texts)
+            metadata[TEXT_CALLS_TEXT_FIELD] = [
+                text[:_TEXT_CALLS_KEPT_CHARS] for text in texts[:_TEXT_CALLS_KEPT]
+            ]
+        return result, metadata
+
     def _query_FC(self, inference_data: dict):
         message: list[dict] = inference_data["message"]
         tools = inference_data["tools"]
+        _request.offered = [  # BFCL-Modified: a call is credited from text only to a tool offered here
+            tool["function"]["name"]
+            for tool in tools
+            if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+        ]
         inference_data["inference_input_log"] = {"message": repr(message), "tools": tools}
 
         kwargs = {
@@ -120,6 +161,36 @@ class OpenAICompletionsHandler(BaseHandler):
             tool_call_ids = []
 
         model_responses_message_for_chat_history = api_response.choices[0].message
+
+        # BFCL-Modified (MODIFICATIONS.md): a reply with no structured call whose text ends with a call
+        # to a tool this request offered is that call. It is set where BFCL reads a call, and the
+        # message kept for the conversation is the plain dict BFCL's handlers record for a structured call.
+        if isinstance(model_responses, str):
+            found = recover_text_calls(model_responses, getattr(_request, "offered", []))
+            if found is not None:
+                arguments = [json.dumps(call.arguments) for call in found.calls]
+                tool_call_ids = [f"call_text_{index}" for index in range(len(found.calls))]
+                _credited_texts().append(model_responses)
+                print(
+                    f"[BFCL-Modified] credited a call returned as text ({found.shape}): "
+                    + ", ".join(call.name for call in found.calls),
+                    flush=True,
+                )
+                model_responses = [
+                    {call.name: args} for call, args in zip(found.calls, arguments)
+                ]
+                model_responses_message_for_chat_history = {
+                    "role": "assistant",
+                    "content": found.lead_in or None,
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": call.name, "arguments": args},
+                        }
+                        for call_id, call, args in zip(tool_call_ids, found.calls, arguments)
+                    ],
+                }
 
         return {
             "model_responses": model_responses,

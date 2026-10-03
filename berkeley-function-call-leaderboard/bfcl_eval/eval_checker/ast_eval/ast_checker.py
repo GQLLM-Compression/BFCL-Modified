@@ -182,6 +182,23 @@ def standardize_string(input_string: str):
     return re.sub(regex_string, "", input_string).lower().replace("'", '"')
 
 
+def matches_with_qualifier(model_output: str, standardize_possible_answer: list):
+    """
+    BFCL-Modified (MODIFICATIONS.md): a value that is an accepted answer followed by a comma and more
+    text is that answer with a qualifier, so 'Chennai, India' is read as 'Chennai'. The function's own
+    description often asks for 'City, State' or 'City, Country' and the model followed it.
+    The leading comma-separated parts, from the first onward, are tried against the accepted answers;
+    something must follow them.
+    """
+    parts = model_output.split(",")
+    for count in range(1, len(parts)):
+        leading = standardize_string(",".join(parts[:count]))
+        trailing = standardize_string(",".join(parts[count:]))
+        if leading and trailing and leading in standardize_possible_answer:
+            return True
+    return False
+
+
 def string_checker(param: str, model_output: str, possible_answer: list):
     standardize_possible_answer = []
     standardize_model_output = standardize_string(model_output)
@@ -189,7 +206,9 @@ def string_checker(param: str, model_output: str, possible_answer: list):
         if type(possible_answer[i]) == str:
             standardize_possible_answer.append(standardize_string(possible_answer[i]))
 
-    if standardize_model_output not in standardize_possible_answer:
+    if standardize_model_output not in standardize_possible_answer and not matches_with_qualifier(
+        model_output, standardize_possible_answer
+    ):
         return {
             "valid": False,
             "error": [
@@ -275,7 +294,10 @@ def dict_checker(param: str, model_output: dict, possible_answers: list):
                 else:
                     standardize_possible_answer.append(possible_answer[key][i])
 
-            if standardize_value not in standardize_possible_answer:
+            if standardize_value not in standardize_possible_answer and not (
+                type(value) == str  # BFCL-Modified: 'Chennai, India' is read as 'Chennai'
+                and matches_with_qualifier(value, standardize_possible_answer)
+            ):
                 result["valid"] = False
                 result["error"].append(
                     f"Invalid value for parameter {repr(key)}: {repr(value)}. Expected one of {standardize_possible_answer}."
