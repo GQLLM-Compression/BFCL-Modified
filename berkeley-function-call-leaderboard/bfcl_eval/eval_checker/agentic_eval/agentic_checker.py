@@ -1,5 +1,7 @@
 import re
 
+from bfcl_eval.eval_checker.apostrophes import straight_apostrophes
+
 #### Main functions ####
 
 
@@ -42,8 +44,9 @@ def standardize_string(input_string: str):
     """
     This function standardizes the string by removing all the whitespace, ",./-_*^()" punctuation, and converting it to lowercase
     It will also convert all the single quotes to double quotes
+    BFCL-Modified: a typographic apostrophe is first read as the plain one (see MODIFICATIONS.md)
     This is used to compare the model output with the possible answers
     We don't want to punish model for answer like April 1, 2024 vs April 1,2024, vs April 1 2024
     """
     regex_string = r"[\,\.\/\-\_\*\^\(\)]"
-    return re.sub(regex_string, "", input_string).lower().replace("'", '"')
+    return re.sub(regex_string, "", straight_apostrophes(input_string)).lower().replace("'", '"')

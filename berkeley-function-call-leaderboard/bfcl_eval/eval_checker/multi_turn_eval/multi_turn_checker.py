@@ -1,3 +1,4 @@
+from bfcl_eval.eval_checker.apostrophes import with_straight_apostrophes
 from bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils import (
     execute_multi_turn_func_call,
     is_empty_execute_response,
@@ -206,6 +207,12 @@ def response_checker(
         ground_truth_response_list, model_response_list
     )
     if not is_subsequence:
+        # BFCL-Modified: a typographic apostrophe is read as the plain one (see MODIFICATIONS.md)
+        is_subsequence, _ = _is_subsequence_unordered(
+            with_straight_apostrophes(ground_truth_response_list),
+            with_straight_apostrophes(model_response_list),
+        )
+    if not is_subsequence:
         return {
             "valid": False,
             "error_message": f"Model response execution results so far does not contain all the ground truth response execution results for turn {turn_index}.",
@@ -272,7 +279,11 @@ def _compare_instances(model_obect, ground_truth_object):
         model_attr = getattr(model_obect, attr_name)
         ground_truth_attr = getattr(ground_truth_object, attr_name)
 
-        if model_attr != ground_truth_attr:
+        # BFCL-Modified: states that differ only by a typographic apostrophe are the same state
+        # (see MODIFICATIONS.md)
+        if model_attr != ground_truth_attr and with_straight_apostrophes(
+            model_attr
+        ) != with_straight_apostrophes(ground_truth_attr):
             valid = False
             differences[attr_name] = {"model": model_attr, "ground_truth": ground_truth_attr}
 

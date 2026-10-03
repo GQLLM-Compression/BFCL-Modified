@@ -1,8 +1,9 @@
 # Berkeley Function Calling Leaderboard (BFCL)
 
-> **BFCL-Modified.** In this fork two scoring rules differ from the upstream leaderboard (a tool call returned as
-> text is credited, and an accepted answer followed by a qualifier passes). Its scores are not comparable with the
-> published leaderboard; see [MODIFICATIONS.md](../MODIFICATIONS.md).
+> **BFCL-Modified.** In this fork three scoring rules differ from the upstream leaderboard (a tool call returned as
+> text is credited, an accepted answer followed by a qualifier passes, and a typographic apostrophe is read as the
+> plain one). Its scores are not comparable with the published leaderboard; see
+> [MODIFICATIONS.md](../MODIFICATIONS.md).
 
 ## Table of Contents
 

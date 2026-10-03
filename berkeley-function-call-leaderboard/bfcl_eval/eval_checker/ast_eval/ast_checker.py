@@ -3,6 +3,7 @@ import re
 from bfcl_eval.constants.enums import Language
 from bfcl_eval.constants.model_config import MODEL_CONFIG_MAPPING
 from bfcl_eval.constants.type_mappings import JAVA_TYPE_CONVERSION, JS_TYPE_CONVERSION
+from bfcl_eval.eval_checker.apostrophes import straight_apostrophes
 from bfcl_eval.eval_checker.ast_eval.type_convertor.java_type_converter import (
     java_type_converter,
 )
@@ -175,11 +176,12 @@ def standardize_string(input_string: str):
     """
     This function standardizes the string by removing all the spaces, ",./-_*^" punctuation, and converting it to lowercase
     It will also convert all the single quotes to double quotes
+    BFCL-Modified: a typographic apostrophe is first read as the plain one (see MODIFICATIONS.md)
     This is used to compare the model output with the possible answers
     We don't want to punish model for answer like April 1, 2024 vs April 1,2024, vs April 1 2024
     """
     regex_string = r"[ \,\.\/\-\_\*\^]"
-    return re.sub(regex_string, "", input_string).lower().replace("'", '"')
+    return re.sub(regex_string, "", straight_apostrophes(input_string)).lower().replace("'", '"')
 
 
 def matches_with_qualifier(model_output: str, standardize_possible_answer: list):
